@@ -26,5 +26,5 @@ export * from './observables/participant';
 export * from './observables/track';
 export * from './observables/dataChannel';
 export * from './observables/dom-event';
-export declare const log: import("loglevel").Logger;
+export { log, setLogLevel } from './logger';
 //# sourceMappingURL=index.d.ts.map

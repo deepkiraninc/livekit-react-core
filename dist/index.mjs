@@ -225,10 +225,15 @@ var allParticipantEvents = [
 ];
 
 // src/logger.ts
+import { setLogLevel as setClientSdkLogLevel } from "livekit-client";
 import loglevel from "loglevel";
 var log = loglevel.getLogger("lk-components-js");
 log.setDefaultLevel("WARN");
-var logger_default = log;
+function setLogLevel(level, options = {}) {
+  var _a;
+  log.setLevel(level);
+  setClientSdkLogLevel((_a = options.liveKitClientLogLevel) != null ? _a : level);
+}
 
 // src/helper/grid-layouts.ts
 var GRID_LAYOUTS = [
@@ -310,7 +315,7 @@ function selectGridLayout(layouts, participantCount, width, height) {
   if (layout === void 0) {
     layout = layouts[layouts.length - 1];
     if (layout) {
-      logger_default.warn(
+      log.warn(
         `No layout found for: participantCount: ${participantCount}, width/height: ${width}/${height} fallback to biggest available layout (${layout.name}).`
       );
     } else {
@@ -338,6 +343,11 @@ function setDifference(setA, setB) {
     _difference.delete(elem);
   }
   return _difference;
+}
+
+// src/helper/featureDetection.ts
+function supportsScreenSharing() {
+  return typeof navigator !== "undefined" && navigator.mediaDevices && !!navigator.mediaDevices.getDisplayMedia;
 }
 
 // src/types.ts
@@ -663,7 +673,7 @@ function updatePages(currentList, nextList, maxItemsOnPage) {
       const updatedPage = divideIntoPages(updatedList, maxItemsOnPage)[pageIndex];
       const changes = visualPageChange(updatedPage, nextPage);
       if (listNeedsUpdating(changes)) {
-        logger_default.debug(
+        log.debug(
           `Detected visual changes on page: ${pageIndex}, current: ${flatTrackReferenceArray(
             currentPage
           )}, next: ${flatTrackReferenceArray(nextPage)}`,
@@ -711,7 +721,7 @@ import { ParticipantEvent as ParticipantEvent2, RoomEvent as RoomEvent3, Track a
 import { map as map3, switchMap, Observable as Observable2, startWith as startWith3 } from "rxjs";
 
 // src/observables/room.ts
-import { Subject, map, Observable, startWith, finalize } from "rxjs";
+import { Subject, map, Observable, startWith, finalize, filter } from "rxjs";
 import { Room, RoomEvent as RoomEvent2, Track as Track4 } from "livekit-client";
 function observeRoomEvents(room, ...events) {
   const observable = new Observable((subscribe) => {
@@ -881,6 +891,24 @@ function createMediaDeviceObserver(kind, requestPermissions = true) {
 }
 function createDataObserver(room) {
   return roomEventSelector(room, RoomEvent2.DataReceived);
+}
+function roomAudioPlaybackAllowedObservable(room) {
+  const observable = observeRoomEvents(room, RoomEvent2.AudioPlaybackStatusChanged).pipe(
+    map((room2) => {
+      return { canPlayAudio: room2.canPlaybackAudio };
+    })
+  );
+  return observable;
+}
+function createActiveDeviceObservable(room, kind) {
+  return roomEventSelector(room, RoomEvent2.ActiveDeviceChanged).pipe(
+    filter(([kindOfDevice]) => kindOfDevice === kind),
+    map(([kind2, deviceId]) => {
+      console.log("activeDeviceObservable | RoomEvent.ActiveDeviceChanged", { kind: kind2, deviceId });
+      return deviceId;
+    }),
+    startWith(room.getActiveDevice(kind))
+  );
 }
 
 // src/components/mediaTrack.ts
@@ -1189,46 +1217,24 @@ function setupManualToggle() {
 }
 
 // src/components/mediaDeviceSelect.ts
-import { Track as Track8 } from "livekit-client";
-import { BehaviorSubject, map as map5, mergeWith } from "rxjs";
+import { BehaviorSubject } from "rxjs";
 function setupDeviceSelector(kind, room) {
   const activeDeviceSubject = new BehaviorSubject(void 0);
-  const activeDeviceObservable = room ? observeParticipantMedia(room.localParticipant).pipe(
-    map5((participantMedia) => {
-      var _a, _b, _c;
-      let localTrack;
-      switch (kind) {
-        case "videoinput":
-          localTrack = (_a = participantMedia.cameraTrack) == null ? void 0 : _a.track;
-          break;
-        case "audioinput":
-          localTrack = (_b = participantMedia.microphoneTrack) == null ? void 0 : _b.track;
-          break;
-        default:
-          localTrack = void 0;
-          break;
-      }
-      return (_c = localTrack == null ? void 0 : localTrack.mediaStreamTrack.getSettings()) == null ? void 0 : _c.deviceId;
-    }),
-    mergeWith(activeDeviceSubject)
-  ) : activeDeviceSubject.asObservable();
-  const setActiveMediaDevice = (id) => __async(this, null, function* () {
-    var _a, _b, _c, _d;
+  const activeDeviceObservable = room ? createActiveDeviceObservable(room, kind) : activeDeviceSubject.asObservable();
+  const setActiveMediaDevice = (_0, ..._1) => __async(this, [_0, ..._1], function* (id, options = {}) {
+    var _a;
     if (room) {
-      logger_default.debug(`Switching active device of kind "${kind}" with id ${id}.`);
-      yield room.switchActiveDevice(kind, id);
-      let actualDeviceId = id;
-      if (kind === "videoinput") {
-        actualDeviceId = yield (_b = (_a = room.localParticipant.getTrack(Track8.Source.Camera)) == null ? void 0 : _a.track) == null ? void 0 : _b.getDeviceId();
-      } else if (kind === "audioinput") {
-        actualDeviceId = yield (_d = (_c = room.localParticipant.getTrack(Track8.Source.Microphone)) == null ? void 0 : _c.track) == null ? void 0 : _d.getDeviceId();
-      }
+      log.debug(`Switching active device of kind "${kind}" with id ${id}.`);
+      yield room.switchActiveDevice(kind, id, options.exact);
+      const actualDeviceId = (_a = room.getActiveDevice(kind)) != null ? _a : id;
       if (actualDeviceId !== id && id !== "default") {
-        logger_default.warn(`Failed to select the desired device. Desired: ${id}. Actual: ${actualDeviceId}`);
+        log.warn(
+          `We tried to select the device with id (${id}), but the browser decided to select the device with id (${actualDeviceId}) instead.`
+        );
       }
       activeDeviceSubject.next(id === "default" ? id : actualDeviceId);
     } else {
-      logger_default.debug("Skip the device switch because the room object is not available. ");
+      log.debug("Skip the device switch because the room object is not available. ");
       activeDeviceSubject.next(id);
     }
   });
@@ -1257,14 +1263,14 @@ function setupConnectionQualityIndicator(participant) {
 }
 
 // src/components/trackMutedIndicator.ts
-import { Track as Track9 } from "livekit-client";
+import { Track as Track8 } from "livekit-client";
 function setupTrackMutedIndicator(participant, source) {
   let classForSource = "track-muted-indicator-camera";
   switch (source) {
-    case Track9.Source.Camera:
+    case Track8.Source.Camera:
       classForSource = "track-muted-indicator-camera";
       break;
-    case Track9.Source.Microphone:
+    case Track8.Source.Microphone:
       classForSource = "track-muted-indicator-microphone";
       break;
     default:
@@ -1291,11 +1297,11 @@ function setupParticipantTile() {
 
 // src/components/chat.ts
 import { DataPacket_Kind as DataPacket_Kind2 } from "livekit-client";
-import { BehaviorSubject as BehaviorSubject2, Subject as Subject3, scan, map as map7, takeUntil } from "rxjs";
+import { BehaviorSubject as BehaviorSubject2, Subject as Subject3, scan, map as map6, takeUntil } from "rxjs";
 
 // src/observables/dataChannel.ts
 import { DataPacket_Kind } from "livekit-client";
-import { Observable as Observable3, filter, map as map6 } from "rxjs";
+import { Observable as Observable3, filter as filter2, map as map5 } from "rxjs";
 var DataTopic = {
   CHAT: "lk-chat-topic"
 };
@@ -1310,8 +1316,8 @@ function sendMessage(_0, _1, _2) {
 }
 function setupDataMessageHandler(room, topic, onMessage) {
   const messageObservable = createDataObserver(room).pipe(
-    filter(([, , , messageTopic]) => messageTopic === void 0 || messageTopic === topic),
-    map6(([payload, participant, , messageTopic]) => {
+    filter2(([, , , messageTopic]) => topic === void 0 || messageTopic === topic),
+    map5(([payload, participant, , messageTopic]) => {
       const msg = {
         payload,
         topic: messageTopic,
@@ -1345,7 +1351,7 @@ function setupChat(room) {
   const { messageObservable } = setupDataMessageHandler(room, DataTopic.CHAT);
   messageObservable.pipe(takeUntil(onDestroyObservable)).subscribe(messageSubject);
   const messagesObservable = messageSubject.pipe(
-    map7((msg) => {
+    map6((msg) => {
       const parsedMessage = JSON.parse(decoder.decode(msg.payload));
       const newMessage = __spreadProps(__spreadValues({}, parsedMessage), { from: msg.from });
       return newMessage;
@@ -1379,19 +1385,9 @@ function setupChat(room) {
 }
 
 // src/components/startAudio.ts
-import { RoomEvent as RoomEvent4 } from "livekit-client";
-import { map as map8 } from "rxjs";
-function roomAudioPlaybackAllowedObservable(room) {
-  const observable = observeRoomEvents(room, RoomEvent4.AudioPlaybackStatusChanged).pipe(
-    map8((room2) => {
-      return { canPlayAudio: room2.canPlaybackAudio };
-    })
-  );
-  return observable;
-}
 function setupStartAudio() {
   const handleStartAudioPlayback = (room) => __async(this, null, function* () {
-    logger_default.info("Start Audio for room: ", room);
+    log.info("Start Audio for room: ", room);
     yield room.startAudio();
   });
   const className = prefixClass("start-audio-button");
@@ -1435,8 +1431,8 @@ function setupLiveKitRoom() {
 }
 
 // src/observables/track.ts
-import { RoomEvent as RoomEvent5, TrackEvent } from "livekit-client";
-import { map as map9, Observable as Observable4, startWith as startWith5 } from "rxjs";
+import { RoomEvent as RoomEvent4, TrackEvent } from "livekit-client";
+import { map as map7, Observable as Observable4, startWith as startWith5 } from "rxjs";
 function trackObservable(track) {
   const trackObserver = observeTrackEvents(
     track,
@@ -1494,20 +1490,20 @@ function trackReferencesObservable(room, sources, options) {
   const onlySubscribedTracks = (_b = options.onlySubscribed) != null ? _b : true;
   const roomEvents = Array.from(
     (/* @__PURE__ */ new Set([
-      RoomEvent5.ParticipantConnected,
-      RoomEvent5.ConnectionStateChanged,
-      RoomEvent5.LocalTrackPublished,
-      RoomEvent5.LocalTrackUnpublished,
-      RoomEvent5.TrackPublished,
-      RoomEvent5.TrackUnpublished,
-      RoomEvent5.TrackSubscriptionStatusChanged,
+      RoomEvent4.ParticipantConnected,
+      RoomEvent4.ConnectionStateChanged,
+      RoomEvent4.LocalTrackPublished,
+      RoomEvent4.LocalTrackUnpublished,
+      RoomEvent4.TrackPublished,
+      RoomEvent4.TrackUnpublished,
+      RoomEvent4.TrackSubscriptionStatusChanged,
       ...additionalRoomEvents
     ])).values()
   );
   const observable = observeRoomEvents(room, ...roomEvents).pipe(
-    map9((room2) => {
+    map7((room2) => {
       const data = getTrackReferences(room2, sources, onlySubscribedTracks);
-      logger_default.debug(`TrackReference[] was updated. (length ${data.trackReferences.length})`, data);
+      log.debug(`TrackReference[] was updated. (length ${data.trackReferences.length})`, data);
       return data;
     }),
     startWith5(getTrackReferences(room, sources, onlySubscribedTracks))
@@ -1516,11 +1512,11 @@ function trackReferencesObservable(room, sources, options) {
 }
 
 // src/observables/dom-event.ts
-import { concat, distinctUntilChanged, fromEvent, map as map10, of, skipUntil, timeout } from "rxjs";
+import { concat, distinctUntilChanged, fromEvent, map as map8, of, skipUntil, timeout } from "rxjs";
 function createInteractingObservable(htmlElement, inactiveAfter = 1e3) {
   if (htmlElement === null)
     return of(false);
-  const move$ = fromEvent(htmlElement, "mousemove").pipe(map10(() => true));
+  const move$ = fromEvent(htmlElement, "mousemove").pipe(map8(() => true));
   const moveAndStop$ = move$.pipe(
     timeout({
       each: inactiveAfter,
@@ -1530,9 +1526,6 @@ function createInteractingObservable(htmlElement, inactiveAfter = 1e3) {
   );
   return moveAndStop$;
 }
-
-// src/index.ts
-var log2 = logger_default;
 export {
   DataTopic,
   GRID_LAYOUTS,
@@ -1548,6 +1541,7 @@ export {
   connectedParticipantObserver,
   connectedParticipantsObserver,
   connectionStateObserver,
+  createActiveDeviceObservable,
   createConnectionQualityObserver,
   createDataObserver,
   createDefaultGrammar,
@@ -1572,7 +1566,7 @@ export {
   isTrackReference,
   isTrackReferencePinned,
   isTrackReferencePlaceholder,
-  log2 as log,
+  log,
   mutedObserver,
   observeParticipantEvents,
   observeParticipantMedia,
@@ -1581,6 +1575,7 @@ export {
   participantEventSelector,
   participantInfoObserver,
   participantPermissionObserver,
+  roomAudioPlaybackAllowedObservable,
   roomEventSelector,
   roomInfoObserver,
   roomObserver,
@@ -1588,6 +1583,7 @@ export {
   selectGridLayout,
   sendMessage,
   setDifference,
+  setLogLevel,
   setupChat,
   setupChatToggle,
   setupClearPinButton,
@@ -1608,6 +1604,7 @@ export {
   setupUserToggle,
   sortParticipants,
   sortTrackReferences,
+  supportsScreenSharing,
   tokenize,
   trackObservable,
   trackReferencesObservable,
