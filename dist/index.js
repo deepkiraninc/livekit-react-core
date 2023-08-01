@@ -106,6 +106,7 @@ __export(src_exports, {
   isTrackReference: () => isTrackReference,
   isTrackReferencePinned: () => isTrackReferencePinned,
   isTrackReferencePlaceholder: () => isTrackReferencePlaceholder,
+  isWeb: () => isWeb,
   log: () => log,
   mutedObserver: () => mutedObserver,
   observeParticipantEvents: () => observeParticipantEvents,
@@ -376,7 +377,7 @@ var GRID_LAYOUTS = [
     name: "2x1",
     minTiles: 2,
     maxTiles: 2,
-    minWidth: 800,
+    minWidth: 900,
     minHeight: 0
   },
   {
@@ -467,9 +468,7 @@ function supportsScreenSharing() {
 
 // src/types.ts
 var PIN_DEFAULT_STATE = [];
-var WIDGET_DEFAULT_STATE = {
-  showChat: null
-};
+var WIDGET_DEFAULT_STATE = { showChat: null, unreadMessages: 0 };
 function isSourceWitOptions(source) {
   return typeof source === "object";
 }
@@ -776,7 +775,7 @@ function divideIntoPages(list, maxElementsOnPage) {
   return pages;
 }
 function updatePages(currentList, nextList, maxItemsOnPage) {
-  let updatedList = [...currentList];
+  let updatedList = refreshList(currentList, nextList);
   if (currentList.length < nextList.length) {
     const addedItems = differenceBy(nextList, currentList, getTrackReferenceId);
     updatedList = [...updatedList, ...addedItems];
@@ -825,6 +824,18 @@ function updatePages(currentList, nextList, maxItemsOnPage) {
     );
   }
   return updatedList;
+}
+function refreshList(currentList, nextList) {
+  return currentList.map((currentItem) => {
+    const updateForCurrentItem = nextList.find(
+      (newItem_) => getTrackReferenceId(currentItem) === getTrackReferenceId(newItem_)
+    );
+    if (updateForCurrentItem) {
+      return updateForCurrentItem;
+    } else {
+      return currentItem;
+    }
+  });
 }
 
 // src/components/mediaToggle.ts
@@ -1000,9 +1011,8 @@ function createMediaDeviceObserver(kind, requestPermissions = true) {
       );
     }
     (_a = navigator == null ? void 0 : navigator.mediaDevices) == null ? void 0 : _a.addEventListener("devicechange", onDeviceChange);
-    onDeviceChange();
   }
-  return observable;
+  return (0, import_rxjs.concat)(import_livekit_client8.Room.getLocalDevices(kind, requestPermissions), observable);
 }
 function createDataObserver(room) {
   return roomEventSelector(room, import_livekit_client8.RoomEvent.DataReceived);
@@ -1019,7 +1029,7 @@ function createActiveDeviceObservable(room, kind) {
   return roomEventSelector(room, import_livekit_client8.RoomEvent.ActiveDeviceChanged).pipe(
     (0, import_rxjs.filter)(([kindOfDevice]) => kindOfDevice === kind),
     (0, import_rxjs.map)(([kind2, deviceId]) => {
-      console.log("activeDeviceObservable | RoomEvent.ActiveDeviceChanged", { kind: kind2, deviceId });
+      log.debug("activeDeviceObservable | RoomEvent.ActiveDeviceChanged", { kind: kind2, deviceId });
       return deviceId;
     }),
     (0, import_rxjs.startWith)(room.getActiveDevice(kind))
@@ -1332,24 +1342,40 @@ function setupManualToggle() {
 }
 
 // src/components/mediaDeviceSelect.ts
+var import_livekit_client12 = require("livekit-client");
 var import_rxjs5 = require("rxjs");
-function setupDeviceSelector(kind, room) {
+function setupDeviceSelector(kind, room, localTrack) {
   const activeDeviceSubject = new import_rxjs5.BehaviorSubject(void 0);
   const activeDeviceObservable = room ? createActiveDeviceObservable(room, kind) : activeDeviceSubject.asObservable();
   const setActiveMediaDevice = (_0, ..._1) => __async(this, [_0, ..._1], function* (id, options = {}) {
-    var _a;
+    var _a, _b, _c;
     if (room) {
       log.debug(`Switching active device of kind "${kind}" with id ${id}.`);
       yield room.switchActiveDevice(kind, id, options.exact);
       const actualDeviceId = (_a = room.getActiveDevice(kind)) != null ? _a : id;
       if (actualDeviceId !== id && id !== "default") {
-        log.warn(
+        log.info(
           `We tried to select the device with id (${id}), but the browser decided to select the device with id (${actualDeviceId}) instead.`
         );
       }
-      activeDeviceSubject.next(id === "default" ? id : actualDeviceId);
-    } else {
-      log.debug("Skip the device switch because the room object is not available. ");
+      let targetTrack = void 0;
+      if (kind === "audioinput")
+        targetTrack = (_b = room.localParticipant.getTrack(import_livekit_client12.Track.Source.Microphone)) == null ? void 0 : _b.track;
+      else if (kind === "videoinput") {
+        targetTrack = (_c = room.localParticipant.getTrack(import_livekit_client12.Track.Source.Camera)) == null ? void 0 : _c.track;
+      }
+      const useDefault = id === "default" && !targetTrack || id === "default" && (targetTrack == null ? void 0 : targetTrack.mediaStreamTrack.label.startsWith("Default"));
+      activeDeviceSubject.next(useDefault ? id : actualDeviceId);
+    } else if (localTrack) {
+      yield localTrack.setDeviceId(options.exact ? { exact: id } : id);
+      const actualId = yield localTrack.getDeviceId();
+      activeDeviceSubject.next(
+        id === "default" && localTrack.mediaStreamTrack.label.startsWith("Default") ? id : actualId
+      );
+    } else if (activeDeviceSubject.value !== id) {
+      log.warn(
+        "device switch skipped, please provide either a room or a local track to switch on. "
+      );
       activeDeviceSubject.next(id);
     }
   });
@@ -1378,14 +1404,14 @@ function setupConnectionQualityIndicator(participant) {
 }
 
 // src/components/trackMutedIndicator.ts
-var import_livekit_client12 = require("livekit-client");
+var import_livekit_client13 = require("livekit-client");
 function setupTrackMutedIndicator(participant, source) {
   let classForSource = "track-muted-indicator-camera";
   switch (source) {
-    case import_livekit_client12.Track.Source.Camera:
+    case import_livekit_client13.Track.Source.Camera:
       classForSource = "track-muted-indicator-camera";
       break;
-    case import_livekit_client12.Track.Source.Microphone:
+    case import_livekit_client13.Track.Source.Microphone:
       classForSource = "track-muted-indicator-microphone";
       break;
     default:
@@ -1411,11 +1437,11 @@ function setupParticipantTile() {
 }
 
 // src/components/chat.ts
-var import_livekit_client14 = require("livekit-client");
+var import_livekit_client15 = require("livekit-client");
 var import_rxjs7 = require("rxjs");
 
 // src/observables/dataChannel.ts
-var import_livekit_client13 = require("livekit-client");
+var import_livekit_client14 = require("livekit-client");
 var import_rxjs6 = require("rxjs");
 var DataTopic = {
   CHAT: "lk-chat-topic"
@@ -1423,7 +1449,7 @@ var DataTopic = {
 function sendMessage(_0, _1, _2) {
   return __async(this, arguments, function* (localParticipant, payload, topic, options = {}) {
     const { kind, destination } = options;
-    yield localParticipant.publishData(payload, kind != null ? kind : import_livekit_client13.DataPacket_Kind.RELIABLE, {
+    yield localParticipant.publishData(payload, kind != null ? kind : import_livekit_client14.DataPacket_Kind.RELIABLE, {
       destination,
       topic
     });
@@ -1481,7 +1507,7 @@ function setupChat(room) {
     isSending$.next(true);
     try {
       yield sendMessage(room.localParticipant, encodedMsg, DataTopic.CHAT, {
-        kind: import_livekit_client14.DataPacket_Kind.RELIABLE
+        kind: import_livekit_client15.DataPacket_Kind.RELIABLE
       });
       messageSubject.next({
         payload: encodedMsg,
@@ -1546,15 +1572,15 @@ function setupLiveKitRoom() {
 }
 
 // src/observables/track.ts
-var import_livekit_client15 = require("livekit-client");
+var import_livekit_client16 = require("livekit-client");
 var import_rxjs8 = require("rxjs");
 function trackObservable(track) {
   const trackObserver = observeTrackEvents(
     track,
-    import_livekit_client15.TrackEvent.Muted,
-    import_livekit_client15.TrackEvent.Unmuted,
-    import_livekit_client15.TrackEvent.Subscribed,
-    import_livekit_client15.TrackEvent.Unsubscribed
+    import_livekit_client16.TrackEvent.Muted,
+    import_livekit_client16.TrackEvent.Unmuted,
+    import_livekit_client16.TrackEvent.Subscribed,
+    import_livekit_client16.TrackEvent.Unsubscribed
   );
   return trackObserver;
 }
@@ -1590,7 +1616,6 @@ function getTrackReferences(room, sources, onlySubscribedTracks = true) {
         return {
           participant,
           publication: track,
-          track: track.track,
           source: track.source
         };
       });
@@ -1605,13 +1630,13 @@ function trackReferencesObservable(room, sources, options) {
   const onlySubscribedTracks = (_b = options.onlySubscribed) != null ? _b : true;
   const roomEvents = Array.from(
     (/* @__PURE__ */ new Set([
-      import_livekit_client15.RoomEvent.ParticipantConnected,
-      import_livekit_client15.RoomEvent.ConnectionStateChanged,
-      import_livekit_client15.RoomEvent.LocalTrackPublished,
-      import_livekit_client15.RoomEvent.LocalTrackUnpublished,
-      import_livekit_client15.RoomEvent.TrackPublished,
-      import_livekit_client15.RoomEvent.TrackUnpublished,
-      import_livekit_client15.RoomEvent.TrackSubscriptionStatusChanged,
+      import_livekit_client16.RoomEvent.ParticipantConnected,
+      import_livekit_client16.RoomEvent.ConnectionStateChanged,
+      import_livekit_client16.RoomEvent.LocalTrackPublished,
+      import_livekit_client16.RoomEvent.LocalTrackUnpublished,
+      import_livekit_client16.RoomEvent.TrackPublished,
+      import_livekit_client16.RoomEvent.TrackUnpublished,
+      import_livekit_client16.RoomEvent.TrackSubscriptionStatusChanged,
       ...additionalRoomEvents
     ])).values()
   );
@@ -1631,7 +1656,7 @@ var import_rxjs9 = require("rxjs");
 function createInteractingObservable(htmlElement, inactiveAfter = 1e3) {
   if (htmlElement === null)
     return (0, import_rxjs9.of)(false);
-  const move$ = (0, import_rxjs9.fromEvent)(htmlElement, "mousemove").pipe((0, import_rxjs9.map)(() => true));
+  const move$ = (0, import_rxjs9.fromEvent)(htmlElement, "mousemove", { passive: true }).pipe((0, import_rxjs9.map)(() => true));
   const moveAndStop$ = move$.pipe(
     (0, import_rxjs9.timeout)({
       each: inactiveAfter,
@@ -1682,6 +1707,7 @@ function createInteractingObservable(htmlElement, inactiveAfter = 1e3) {
   isTrackReference,
   isTrackReferencePinned,
   isTrackReferencePlaceholder,
+  isWeb,
   log,
   mutedObserver,
   observeParticipantEvents,
