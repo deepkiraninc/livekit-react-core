@@ -990,7 +990,8 @@ function observeParticipantMedia(participant) {
     ParticipantEvent2.TrackSubscribed,
     ParticipantEvent2.TrackUnsubscribed,
     ParticipantEvent2.LocalTrackPublished,
-    ParticipantEvent2.LocalTrackUnpublished
+    ParticipantEvent2.LocalTrackUnpublished,
+    ParticipantEvent2.MediaDevicesError
     // ParticipantEvent.ConnectionQualityChanged,
   ).pipe(
     map3((p) => {
@@ -1372,14 +1373,18 @@ function setupDataMessageHandler(room, topic, onMessage) {
 // src/components/chat.ts
 var encoder = new TextEncoder();
 var decoder = new TextDecoder();
-function setupChat(room) {
+var encode = (message) => encoder.encode(JSON.stringify({ message: message.message, timestamp: message.timestamp }));
+var decode = (message) => JSON.parse(decoder.decode(message));
+function setupChat(room, options) {
   const onDestroyObservable = new Subject3();
   const messageSubject = new Subject3();
   const { messageObservable } = setupDataMessageHandler(room, DataTopic.CHAT);
   messageObservable.pipe(takeUntil(onDestroyObservable)).subscribe(messageSubject);
+  const { messageDecoder, messageEncoder } = options != null ? options : {};
+  const finalMessageDecoder = messageDecoder != null ? messageDecoder : decode;
   const messagesObservable = messageSubject.pipe(
     map6((msg) => {
-      const parsedMessage = JSON.parse(decoder.decode(msg.payload));
+      const parsedMessage = finalMessageDecoder(msg.payload);
       const newMessage = __spreadProps(__spreadValues({}, parsedMessage), { from: msg.from });
       return newMessage;
     }),
@@ -1387,9 +1392,10 @@ function setupChat(room) {
     takeUntil(onDestroyObservable)
   );
   const isSending$ = new BehaviorSubject2(false);
+  const finalMessageEncoder = messageEncoder != null ? messageEncoder : encode;
   const send = (message) => __async(this, null, function* () {
     const timestamp = Date.now();
-    const encodedMsg = encoder.encode(JSON.stringify({ timestamp, message }));
+    const encodedMsg = finalMessageEncoder({ message, timestamp });
     isSending$.next(true);
     try {
       yield sendMessage(room.localParticipant, encodedMsg, DataTopic.CHAT, {

@@ -1106,7 +1106,8 @@ function observeParticipantMedia(participant) {
     import_livekit_client10.ParticipantEvent.TrackSubscribed,
     import_livekit_client10.ParticipantEvent.TrackUnsubscribed,
     import_livekit_client10.ParticipantEvent.LocalTrackPublished,
-    import_livekit_client10.ParticipantEvent.LocalTrackUnpublished
+    import_livekit_client10.ParticipantEvent.LocalTrackUnpublished,
+    import_livekit_client10.ParticipantEvent.MediaDevicesError
     // ParticipantEvent.ConnectionQualityChanged,
   ).pipe(
     (0, import_rxjs3.map)((p) => {
@@ -1486,14 +1487,18 @@ function setupDataMessageHandler(room, topic, onMessage) {
 // src/components/chat.ts
 var encoder = new TextEncoder();
 var decoder = new TextDecoder();
-function setupChat(room) {
+var encode = (message) => encoder.encode(JSON.stringify({ message: message.message, timestamp: message.timestamp }));
+var decode = (message) => JSON.parse(decoder.decode(message));
+function setupChat(room, options) {
   const onDestroyObservable = new import_rxjs7.Subject();
   const messageSubject = new import_rxjs7.Subject();
   const { messageObservable } = setupDataMessageHandler(room, DataTopic.CHAT);
   messageObservable.pipe((0, import_rxjs7.takeUntil)(onDestroyObservable)).subscribe(messageSubject);
+  const { messageDecoder, messageEncoder } = options != null ? options : {};
+  const finalMessageDecoder = messageDecoder != null ? messageDecoder : decode;
   const messagesObservable = messageSubject.pipe(
     (0, import_rxjs7.map)((msg) => {
-      const parsedMessage = JSON.parse(decoder.decode(msg.payload));
+      const parsedMessage = finalMessageDecoder(msg.payload);
       const newMessage = __spreadProps(__spreadValues({}, parsedMessage), { from: msg.from });
       return newMessage;
     }),
@@ -1501,9 +1506,10 @@ function setupChat(room) {
     (0, import_rxjs7.takeUntil)(onDestroyObservable)
   );
   const isSending$ = new import_rxjs7.BehaviorSubject(false);
+  const finalMessageEncoder = messageEncoder != null ? messageEncoder : encode;
   const send = (message) => __async(this, null, function* () {
     const timestamp = Date.now();
-    const encodedMsg = encoder.encode(JSON.stringify({ timestamp, message }));
+    const encodedMsg = finalMessageEncoder({ message, timestamp });
     isSending$.next(true);
     try {
       yield sendMessage(room.localParticipant, encodedMsg, DataTopic.CHAT, {
