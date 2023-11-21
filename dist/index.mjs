@@ -1373,6 +1373,7 @@ function setupDataMessageHandler(room, topic, onMessage) {
   const messageObservable = createDataObserver(room).pipe(
     filter2(([, , , messageTopic]) => topic === void 0 || messageTopic === topic),
     map5(([payload, participant, , messageTopic]) => {
+      console.log("Message Event");
       console.log(payload);
       console.log(participant);
       const msg = {

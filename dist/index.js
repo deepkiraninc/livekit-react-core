@@ -1490,6 +1490,7 @@ function setupDataMessageHandler(room, topic, onMessage) {
   const messageObservable = createDataObserver(room).pipe(
     (0, import_rxjs6.filter)(([, , , messageTopic]) => topic === void 0 || messageTopic === topic),
     (0, import_rxjs6.map)(([payload, participant, , messageTopic]) => {
+      console.log("Message Event");
       console.log(payload);
       console.log(participant);
       const msg = {
