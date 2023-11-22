@@ -1490,9 +1490,6 @@ function setupDataMessageHandler(room, topic, onMessage) {
   const messageObservable = createDataObserver(room).pipe(
     (0, import_rxjs6.filter)(([, , , messageTopic]) => topic === void 0 || messageTopic === topic),
     (0, import_rxjs6.map)(([payload, participant, , messageTopic]) => {
-      console.log("Message Event");
-      console.log(payload);
-      console.log(participant);
       const msg = {
         payload,
         topic: messageTopic,
@@ -1531,8 +1528,6 @@ function setupChat(room, options) {
   const finalMessageDecoder = messageDecoder != null ? messageDecoder : decode;
   const messagesObservable = messageSubject.pipe(
     (0, import_rxjs7.map)((msg) => {
-      console.log("MSG", msg);
-      console.log("PAYLOAD", msg.payload);
       const parsedMessage = finalMessageDecoder(msg.payload);
       const newMessage = __spreadProps(__spreadValues({}, parsedMessage), { from: msg.from });
       return newMessage;
