@@ -1528,7 +1528,9 @@ function setupChat(room, options) {
   const finalMessageDecoder = messageDecoder != null ? messageDecoder : decode;
   const messagesObservable = messageSubject.pipe(
     (0, import_rxjs7.map)((msg) => {
+      console.log(msg);
       const parsedMessage = finalMessageDecoder(msg.payload);
+      console.log("decoded message", parsedMessage);
       const newMessage = __spreadProps(__spreadValues({}, parsedMessage), { from: msg.from });
       return newMessage;
     }),
