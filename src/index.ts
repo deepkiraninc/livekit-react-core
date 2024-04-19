@@ -16,7 +16,6 @@ export * from './components/mediaTrack';
 export * from './components/participantTile';
 export * from './components/chat';
 export * from './components/startAudio';
-export * from './components/startVideo';
 export * from './components/chatToggle';
 export * from './components/shareLinkToggle';
 export * from './components/userToggle';
@@ -30,6 +29,4 @@ export * from './observables/track';
 export * from './observables/dataChannel';
 export * from './observables/dom-event';
 
-export * from './persistent-storage';
-
-export { log, setLogLevel, setLogExtension } from './logger';
+export { log, setLogLevel } from './logger';

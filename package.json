@@ -1,6 +1,6 @@
 {
   "name": "@livekit/components-core",
-  "version": "0.9.3",
+  "version": "0.7.0",
   "license": "Apache-2.0",
   "author": "LiveKit",
   "repository": {
@@ -35,28 +35,27 @@
   },
   "typings": "dist/index.d.ts",
   "dependencies": {
-    "@floating-ui/dom": "1.6.3",
-    "email-regex": "5.0.0",
-    "loglevel": "1.9.1",
-    "rxjs": "7.8.1"
+    "@floating-ui/dom": "^1.1.0",
+    "email-regex": "^5.0.0",
+    "global-tld-list": "^0.0.1139",
+    "loglevel": "^1.8.1",
+    "rxjs": "^7.8.0"
   },
   "peerDependencies": {
-    "@livekit/protocol": "^1.12.0",
-    "livekit-client": "^2.0.10",
-    "tslib": "^2.6.2"
+    "livekit-client": "^1.12.0"
   },
   "devDependencies": {
-    "@livekit/components-styles": "workspace:*",
+    "@livekit/components-styles": "~1.0.6",
     "@microsoft/api-extractor": "^7.36.0",
-    "@size-limit/file": "^11.0.2",
-    "@size-limit/webpack": "^11.0.2",
-    "size-limit": "^11.0.2",
-    "tsup": "^8.0.0",
-    "typescript": "5.4.3",
-    "vitest": "^1.3.0"
+    "@size-limit/file": "^8.2.4",
+    "@size-limit/webpack": "^8.2.4",
+    "size-limit": "^8.2.4",
+    "tsup": "^7.0.0",
+    "typescript": "5.2.2",
+    "vitest": "^0.34.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=14"
   },
   "publishConfig": {
     "access": "public"

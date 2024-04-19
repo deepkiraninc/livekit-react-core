@@ -1,12 +1,12 @@
 import { createEmailRegExp } from './emailRegex';
-import { createUrlRegExp } from './url-regex';
+import { createUrlRegExp } from './urlRegex';
 
 export type TokenizeGrammar = { [type: string]: RegExp };
 
 export const createDefaultGrammar = () => {
   return {
     email: createEmailRegExp(),
-    url: createUrlRegExp({}),
+    url: createUrlRegExp({ strict: false }),
   } satisfies TokenizeGrammar;
 };
 

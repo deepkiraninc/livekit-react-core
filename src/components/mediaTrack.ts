@@ -28,13 +28,11 @@ export function getTrackByIdentifier(options: TrackIdentifier) {
   } else {
     const { source, name, participant } = options;
     if (source && name) {
-      return participant
-        .getTrackPublications()
-        .find((pub) => pub.source === source && pub.trackName === name);
+      return participant.getTracks().find((pub) => pub.source === source && pub.trackName === name);
     } else if (name) {
-      return participant.getTrackPublicationByName(name);
+      return participant.getTrackByName(name);
     } else if (source) {
-      return participant.getTrackPublication(source);
+      return participant.getTrack(source);
     } else {
       throw new Error('At least one of source and name needs to be defined');
     }

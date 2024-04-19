@@ -12,7 +12,7 @@ export type ToggleSource = Exclude<Track.Source, Track.Source.ScreenShareAudio |
 export declare function setupMediaToggle<T extends ToggleSource>(source: T, room: Room, options?: CaptureOptionsBySource<T>): MediaToggleType<T>;
 export declare function setupManualToggle(): {
     className: string;
-    toggle: (forceState?: boolean) => Promise<void>;
+    toggle: (forceState?: boolean) => void;
     enabledObserver: Observable<boolean>;
     pendingObserver: Observable<boolean>;
 };

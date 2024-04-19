@@ -93,7 +93,7 @@ export function screenShareObserver(room: Room) {
     let trackMap = screenShareTracks.find((tr) => tr.participant.identity === participant.identity);
     const getScreenShareTracks = (participant: Participant) => {
       return participant
-        .getTrackPublications()
+        .getTracks()
         .filter(
           (track) =>
             (track.source === Track.Source.ScreenShare ||
@@ -147,8 +147,8 @@ export function screenShareObserver(room: Room) {
   );
   setTimeout(() => {
     // TODO find way to avoid this timeout
-    for (const p of room.remoteParticipants.values()) {
-      p.getTrackPublications().forEach((track) => {
+    for (const p of room.participants.values()) {
+      p.getTracks().forEach((track) => {
         handleSub(track, p);
       });
     }
@@ -176,18 +176,10 @@ export function activeSpeakerObserver(room: Room) {
   );
 }
 
-export function createMediaDeviceObserver(
-  kind?: MediaDeviceKind,
-  onError?: (e: Error) => void,
-  requestPermissions = true,
-) {
+export function createMediaDeviceObserver(kind?: MediaDeviceKind, requestPermissions = true) {
   const onDeviceChange = async () => {
-    try {
-      const newDevices = await Room.getLocalDevices(kind, requestPermissions);
-      deviceSubject.next(newDevices);
-    } catch (e: any) {
-      onError?.(e);
-    }
+    const newDevices = await Room.getLocalDevices(kind, requestPermissions);
+    deviceSubject.next(newDevices);
   };
   const deviceSubject = new Subject<MediaDeviceInfo[]>();
 
@@ -206,13 +198,7 @@ export function createMediaDeviceObserver(
     navigator?.mediaDevices?.addEventListener('devicechange', onDeviceChange);
   }
   // because we rely on an async function, concat the promise to retrieve the initial values with the observable
-  return concat(
-    Room.getLocalDevices(kind, requestPermissions).catch((e) => {
-      onError?.(e);
-      return [] as MediaDeviceInfo[];
-    }),
-    observable,
-  );
+  return concat(Room.getLocalDevices(kind, requestPermissions), observable);
 }
 
 export function createDataObserver(room: Room) {
@@ -223,15 +209,6 @@ export function roomAudioPlaybackAllowedObservable(room: Room) {
   const observable = observeRoomEvents(room, RoomEvent.AudioPlaybackStatusChanged).pipe(
     map((room) => {
       return { canPlayAudio: room.canPlaybackAudio };
-    }),
-  );
-  return observable;
-}
-
-export function roomVideoPlaybackAllowedObservable(room: Room) {
-  const observable = observeRoomEvents(room, RoomEvent.VideoPlaybackStatusChanged).pipe(
-    map((room) => {
-      return { canPlayVideo: room.canPlaybackVideo };
     }),
   );
   return observable;
