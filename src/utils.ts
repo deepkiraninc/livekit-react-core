@@ -1,75 +1,55 @@
-import type { Participant, TrackPublication } from 'livekit-client';
-import { LocalParticipant, RemoteParticipant } from 'livekit-client';
+import * as React from 'react';
+import { mergeProps as mergePropsReactAria } from './mergeProps';
+import { log } from '@livekit/components-core';
 
-import type { PinState } from './types';
-import type { TrackReference } from './track-reference';
-import { isEqualTrackRef } from './track-reference';
-
-export function isLocal(p: Participant) {
-  return p instanceof LocalParticipant;
+/** @internal */
+export function isProp<U extends HTMLElement, T extends React.HTMLAttributes<U>>(
+  prop: T | undefined,
+): prop is T {
+  return prop !== undefined;
 }
 
-export function isRemote(p: Participant) {
-  return p instanceof RemoteParticipant;
+/** @internal */
+export function mergeProps<
+  U extends HTMLElement,
+  T extends Array<React.HTMLAttributes<U> | undefined>,
+>(...props: T) {
+  return mergePropsReactAria(...props.filter(isProp));
 }
 
-export const attachIfSubscribed = (
-  publication: TrackPublication | undefined,
-  element: HTMLMediaElement | null | undefined,
-) => {
-  if (!publication) return;
-  const { isSubscribed, track } = publication;
-  if (element && track) {
-    if (isSubscribed) {
-      track.attach(element);
-    } else {
-      track.detach(element);
+/** @internal */
+export function cloneSingleChild(
+  children: React.ReactNode | React.ReactNode[],
+  props?: Record<string, any>,
+  key?: any,
+) {
+  return React.Children.map(children, (child) => {
+    // Checking isValidElement is the safe way and avoids a typescript
+    // error too.
+    if (React.isValidElement(child) && React.Children.only(children)) {
+      return React.cloneElement(child, { ...props, key });
     }
-  }
-};
-
-/**
- * Check if the participant track reference is pinned.
- */
-export function isParticipantTrackReferencePinned(
-  trackRef: TrackReference,
-  pinState: PinState | undefined,
-): boolean {
-  if (pinState === undefined) {
-    return false;
-  }
-
-  return pinState.some((pinnedTrackRef) => isEqualTrackRef(pinnedTrackRef, trackRef));
+    return child;
+  });
 }
 
 /**
- * Calculates the scrollbar width by creating two HTML elements
- * and messaging the difference.
  * @internal
  */
-export function getScrollBarWidth() {
-  const inner = document.createElement('p');
-  inner.style.width = '100%';
-  inner.style.height = '200px';
-
-  const outer = document.createElement('div');
-  outer.style.position = 'absolute';
-  outer.style.top = '0px';
-  outer.style.left = '0px';
-  outer.style.visibility = 'hidden';
-  outer.style.width = '200px';
-  outer.style.height = '150px';
-  outer.style.overflow = 'hidden';
-  outer.appendChild(inner);
-
-  document.body.appendChild(outer);
-  const w1 = inner.offsetWidth;
-  outer.style.overflow = 'scroll';
-  let w2 = inner.offsetWidth;
-  if (w1 === w2) {
-    w2 = outer.clientWidth;
+export function warnAboutMissingStyles(el?: HTMLElement) {
+  if (
+    typeof window !== 'undefined' &&
+    typeof process !== 'undefined' &&
+    // eslint-disable-next-line turbo/no-undeclared-env-vars
+    (process?.env?.NODE_ENV === 'dev' ||
+      // eslint-disable-next-line turbo/no-undeclared-env-vars
+      process?.env?.NODE_ENV === 'development')
+  ) {
+    const target = el ?? document.querySelector('.lk-room-container');
+    if (target && !getComputedStyle(target).getPropertyValue('--lk-has-imported-styles')) {
+      log.warn(
+        "It looks like you're not using the `@livekit/components-styles package`. To render the UI with the default styling, please import it in your layout or page.",
+      );
+    }
   }
-  document.body.removeChild(outer);
-  const scrollBarWidth = w1 - w2;
-  return scrollBarWidth;
 }
