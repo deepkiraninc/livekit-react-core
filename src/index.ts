@@ -1,26 +1,35 @@
-export * from './components';
+export * from './constants';
+export * from './utils';
+export * from './helper';
+export * from './types';
+export * from './sorting';
+export * from './track-reference';
 
-export * from './hooks';
+export * from './components/mediaToggle';
+export * from './components/mediaDeviceSelect';
+export * from './components/disconnectButton';
+export * from './components/mediaTrack';
+export * from './components/connectionQualityIndicator';
+export * from './components/trackMutedIndicator';
+export * from './components/participantName';
+export * from './components/mediaTrack';
+export * from './components/participantTile';
+export * from './components/chat';
+export * from './components/startAudio';
+export * from './components/startVideo';
+export * from './components/chatToggle';
+export * from './components/shareLinkToggle';
+export * from './components/userToggle';
+export * from './components/focusToggle';
+export * from './components/clearPinButton';
+export * from './components/room';
 
-export * from './prefabs';
+export * from './observables/room';
+export * from './observables/participant';
+export * from './observables/track';
+export * from './observables/dataChannel';
+export * from './observables/dom-event';
 
-export * from './context';
+export * from './persistent-storage';
 
-export * from './assets/icons';
-
-export * from './assets/images';
-
-// Re-exports from core
-export { setLogLevel, setLogExtension, isTrackReference } from '@livekit/components-core';
-export type {
-  ChatMessage,
-  ReceivedChatMessage,
-  MessageDecoder,
-  MessageEncoder,
-  LocalUserChoices,
-  TrackReference,
-  TrackReferenceOrPlaceholder,
-  ParticipantClickEvent,
-  PinState,
-  WidgetState,
-} from '@livekit/components-core';
+export { log, setLogLevel, setLogExtension } from './logger';
